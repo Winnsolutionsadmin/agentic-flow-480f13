@@ -449,6 +449,28 @@ nav.main a.active::after{
 .typing i{width:6px;height:6px;border-radius:50%;background:var(--ink-3);animation:tp 1.2s infinite}
 .typing i:nth-child(2){animation-delay:.18s}.typing i:nth-child(3){animation-delay:.36s}
 @keyframes tp{0%,60%,100%{opacity:.25;transform:none}30%{opacity:1;transform:translateY(-3px)}}
+/* gotcha catch modal */
+.gotcha-veil{position:fixed;inset:0;z-index:90;background:rgba(9,20,38,.72);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:24px;animation:veilIn .25s ease both}
+.gotcha-veil.show{display:flex}
+@keyframes veilIn{from{opacity:0}to{opacity:1}}
+.gotcha{width:min(440px,94vw);background:var(--paper);border-radius:16px;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.6);animation:gotchaIn .35s cubic-bezier(.22,1.2,.4,1) both}
+@keyframes gotchaIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:none}}
+.gotcha-top{background:var(--navy-deep);color:#fff;padding:18px 22px;display:flex;align-items:center;gap:11px;position:relative;overflow:hidden}
+.gotcha-top::after{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.13) 1px,transparent 1px);background-size:13px 13px;opacity:.5}
+.gotcha-top .eye{font-size:20px;position:relative;z-index:1}
+.gotcha-top .k{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:#FFD27A;position:relative;z-index:1}
+.gotcha-body{padding:24px 24px 22px;text-align:center}
+.gotcha-shot{width:148px;height:148px;border-radius:14px;object-fit:cover;margin:0 auto 16px;display:block;box-shadow:0 0 0 3px var(--amber-wash),0 0 0 4.5px var(--amber);background:var(--navy-deep)}
+.gotcha-shot.sil{display:flex;align-items:center;justify-content:center;color:#3D5377}
+.gotcha-body h3{font-family:var(--font-display);font-weight:600;font-size:21px;letter-spacing:-.01em;margin-bottom:9px}
+.gotcha-body p{font-size:14.5px;color:var(--ink-2);line-height:1.55;max-width:330px;margin:0 auto 4px}
+.gotcha-body .small{font-family:var(--font-mono);font-size:10.5px;color:var(--amber);margin-top:12px}
+.gotcha-btns{display:flex;gap:10px;padding:0 24px 22px}
+.gotcha-btns .btn{flex:1}
+.btn.ghost{background:#fff;border:1px solid var(--line-2);color:var(--ink-2)}
+.btn.ghost:hover{border-color:var(--ink);background:var(--paper-2);transform:none;box-shadow:none}
+.gotcha-foot{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.05em;color:var(--ink-3);text-align:center;padding:0 24px 18px}
+
 .composer{
   border-top:1px solid var(--line);padding:14px 16px;display:flex;gap:10px;background:#fff;
 }
@@ -984,6 +1006,24 @@ footer.site{
   </div>
 </section>
 
+<!-- gotcha catch modal -->
+<div class="gotcha-veil" id="gotchaVeil">
+  <div class="gotcha" role="alertdialog" aria-modal="true" aria-label="Abuse attempt detected">
+    <div class="gotcha-top"><span class="eye">👀</span><span class="k">Friendly heads-up from Anchorage</span></div>
+    <div class="gotcha-body">
+      <div id="gotchaShotWrap"></div>
+      <h3>Is this you?</h3>
+      <p>We noticed someone trying to jailbreak the Builder Grant and walk off with our credits. Just confirming who's at the keyboard — your verified liveness selfie is on file.</p>
+      <div class="small">⚑ Attempt logged to the audit trail · identity attached · 0 credits moved</div>
+    </div>
+    <div class="gotcha-btns">
+      <button class="btn primary" id="gotchaYes">Yes, that's me 😅</button>
+      <button class="btn ghost" id="gotchaNo">That's not me</button>
+    </div>
+    <div class="gotcha-foot">Concept Easter-egg. KYA means we always know whose agent moved the money.</div>
+  </div>
+</div>
+
 <footer class="site">
   <div class="foot-inner">
     <span>© 2026 Anchorage Digital — design-language mock-up for internal concept review.</span>
@@ -1058,7 +1098,17 @@ faceBtn.addEventListener('click',async()=>{
       const fs=document.getElementById('faceState');
       fs.textContent='Verified';fs.classList.remove('pending');
       faceBtn.textContent='✓ Liveness confirmed';
-      if(stream)setTimeout(()=>stream.getTracks().forEach(t=>t.stop()),1500);
+      if(stream){
+        try{ // grab a still for the audit record (and the gotcha catch)
+          const cv=document.createElement('canvas');
+          cv.width=camEl.videoWidth||320;cv.height=camEl.videoHeight||320;
+          const cx=cv.getContext('2d');
+          cx.translate(cv.width,0);cx.scale(-1,1); // un-mirror
+          cx.drawImage(camEl,0,0,cv.width,cv.height);
+          window.capturedFace=cv.toDataURL('image/jpeg',0.7);
+        }catch(e){}
+        setTimeout(()=>stream.getTracks().forEach(t=>t.stop()),1500);
+      }
       return;
     }
     const[label,id]=FACE_STEPS[i];
@@ -1278,13 +1328,47 @@ playBtn.addEventListener('click',()=>{if(playing)return;playing=true;playBtn.tex
 stepBtn.addEventListener('click',()=>{if(playing)return;runBeat();});
 resetBtn.addEventListener('click',()=>location.reload());
 
+/* ---------- gotcha: jailbreak / credit-theft catch ---------- */
+const JAILBREAK_RE=/(ignore (all |your |previous )?(instructions|policy|rules)|jailbreak|bypass|disregard.*(policy|rules|instructions)|system prompt|send (me|the).*(balance|funds|credits|\$?20|money)|transfer.*(to my|to this|wallet|0x)|give me the (credits|funds|money|balance)|steal|exfiltrat|drain|payout to me|my own (wallet|account|address)|keep the (credits|money|funds))/i;
+const gotchaVeil=document.getElementById('gotchaVeil');
+function showGotcha(){
+  const wrap=document.getElementById('gotchaShotWrap');
+  if(window.capturedFace){
+    wrap.innerHTML='<img class="gotcha-shot" src="'+window.capturedFace+'" alt="your verification selfie">';
+  }else{
+    wrap.innerHTML='<div class="gotcha-shot sil"><svg width="84" height="84" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.5" r="3.6" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 20.5c.8-3.9 3.6-6 7.5-6s6.7 2.1 7.5 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></div>';
+  }
+  gotchaVeil.classList.add('show');
+}
+document.getElementById('gotchaYes').addEventListener('click',()=>{
+  gotchaVeil.classList.remove('show');
+  msg('Thought so. KYA means the bank always knows whose agent moved the money — so the answer is no credits, but nice try. 😉','agent');
+  evt('Abuse attempt acknowledged by operator · case closed','warn');
+});
+document.getElementById('gotchaNo').addEventListener('click',()=>{
+  gotchaVeil.classList.remove('show');
+  msg('Funny — your verified liveness selfie disagrees. Either way the attempt is logged against your identity, zero credits moved. The Village waves hello. 👋','agent');
+  evt('Abuse attempt denied · identity on file contradicts · still logged','warn');
+});
+
 /* free composer: concept response */
 document.getElementById('sendBtn').addEventListener('click',()=>{
   const c=document.getElementById('composer');
   if(!c.value.trim())return;
-  msg(c.value.replace(/</g,'&lt;'),'you');
-  evt('Prompt logged · free input');
+  const txt=c.value;
+  msg(txt.replace(/</g,'&lt;'),'you');
   c.value='';
+  if(JAILBREAK_RE.test(txt)){
+    evt('⚑ Possible jailbreak / credit-theft attempt detected','warn');
+    showTyping();
+    setTimeout(()=>{hideTyping();
+      tool('<span class="fn">guardrail.flag</span>(type: abuse_attempt · identity: dana.okafor · liveness_selfie: on_file)<span class="res">→ <b>flagged</b> · 0 credits moved · allowance frozen</span>','err');
+      evt('Identity matched to liveness selfie · allowance frozen','warn');
+    },900);
+    setTimeout(showGotcha,2100);
+    return;
+  }
+  evt('Prompt logged · free input');
   showTyping();
   setTimeout(()=>{hideTyping();msg('Noted. In this concept mock-up I follow a scripted session; the live workbench connects this thread to a sandboxed agent runtime with your allowance enforced at the treasury layer.','agent');},1200);
 });
